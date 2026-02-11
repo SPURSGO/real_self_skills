@@ -73,7 +73,7 @@ TEST(PageTest, UpdatesSidebarWhenDataChanges) {
 }
 ```
 
-### 关键检查点
+### 关键检查点：
 
 ```
 在对任何mock元素进行断言之前：
@@ -88,6 +88,7 @@ TEST(PageTest, UpdatesSidebarWhenDataChanges) {
 ## 反模式2：生产代码中的仅测试方法
 
 **违规示例：**
+
 ```cpp
 // 错误：destroyForTest()仅在测试中使用
 class Session {
@@ -166,7 +167,7 @@ protected:
 };
 ```
 
-### 检查函数
+### 关键检查点：
 
 ```
 在向生产类添加任何方法之前：
@@ -208,6 +209,7 @@ TEST(ServerManagerTest, DetectsDuplicateServer) {
 - 测试因错误的原因通过或莫名其妙地失败
 
 **正确做法：**
+
 ```cpp
 // 正确：在正确的层级进行mock
 TEST(ServerManagerTest, DetectsDuplicateServer) {
@@ -232,7 +234,7 @@ TEST(ServerManagerTest, DetectsDuplicateServer) {
 }
 ```
 
-### 检查函数
+### 关键检查点：
 
 ```
 在mock任何方法之前：
@@ -261,6 +263,7 @@ TEST(ServerManagerTest, DetectsDuplicateServer) {
 ## 反模式4：不完整的Mock
 
 **违规示例：**
+
 ```cpp
 // 错误：部分mock - 只包含你认为需要的字段
 TEST(UserServiceTest, ProcessesUserResponse) {
@@ -285,6 +288,7 @@ void UserService::processResponse(const ApiResponse& response) {
 ```
 
 **为什么这是错误的：**
+
 - **部分mock隐藏了结构假设** - 你只mock了你知道的字段
 - **下游代码可能依赖你未包含的字段** - 静默失败或崩溃
 - **测试通过但集成失败** - Mock不完整，真实API完整
@@ -314,7 +318,7 @@ TEST(UserServiceTest, ProcessesUserResponse) {
 }
 ```
 
-### 检查函数
+### 关键检查点：
 
 ```
 在创建mock响应之前：
@@ -371,7 +375,7 @@ TDD循环：
 
 **TDD为什么有帮助：**
 1. **先写测试** → 强制你思考你实际在测试什么
-2. **观察它失败** → 确认测试测试的是真实行为，而不是mock
+2. **观察它失败** → 确认测试测的是真实行为，而不是mock
 3. **最小化实现** → 不会悄悄加入仅用于测试的方法
 4. **真实依赖** → 在mock之前你会看到测试实际需要什么
 
