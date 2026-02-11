@@ -9,6 +9,7 @@
 **核心原则：** 测试代码做了什么，而不是mock做了什么。
 
 **严格遵循TDD可以避免这些反模式：**
+
 - 先写测试 → 明确测试目标，避免测试mock
 - 看它失败 → 验证测试的是真实行为
 - 最小实现 → 不会添加仅用于测试的代码
@@ -25,15 +26,21 @@
 ## 反模式1：测试Mock行为
 
 **违规示例：**
-```typescript
-// ❌ 错误：测试mock是否存在
-test('renders sidebar', () => {
-  render(<Page />);
-  expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument();
-});
+
+```cpp
+// 错误：测试mock是否存在
+TEST(PageTest, RendersSidebar) {
+  MockSidebarWidget mockSidebar;
+  Page page(&mockSidebar);
+
+  // 错误：仅验证mock对象是否被创建
+  EXPECT_NE(&mockSidebar, nullptr);
+  EXPECT_TRUE(page.hasSidebar());  // 只检查mock是否被注入
+}
 ```
 
 **为什么这是错误的：**
+
 - 你在验证mock是否工作，而不是组件是否工作
 - mock存在时测试通过，不存在时失败
 - 这对真实行为没有任何说明
@@ -41,18 +48,32 @@ test('renders sidebar', () => {
 **代码审查时的关键问题：** "我们是在测试mock的行为吗？"
 
 **正确做法：**
-```typescript
-// ✅ 正确：测试真实组件或不要mock它
-test('renders sidebar', () => {
-  render(<Page />);  // 不要mock sidebar
-  expect(screen.getByRole('navigation')).toBeInTheDocument();
-});
+
+```cpp
+// 正确：测试真实组件或不要mock它
+TEST(PageTest, RendersSidebar) {
+  SidebarWidget sidebar;  // 使用真实组件，不要mock
+  Page page(&sidebar);
+
+  page.render();
+
+  // 验证真实行为：导航功能是否可用
+  EXPECT_TRUE(page.hasNavigationMenu());
+  EXPECT_EQ(page.getSidebarWidth(), 250);
+}
 
 // 或者如果必须mock sidebar以实现隔离：
 // 不要对mock进行断言 - 测试Page在sidebar存在时的行为
+TEST(PageTest, UpdatesSidebarWhenDataChanges) {
+  MockSidebarWidget mockSidebar;
+  EXPECT_CALL(mockSidebar, update(_)).Times(1);  // 验证交互
+
+  Page page(&mockSidebar);
+  page.setData({/* ... */});  // 测试Page的行为，而非mock的存在
+}
 ```
 
-### 检查函数
+### 关键检查点
 
 ```
 在对任何mock元素进行断言之前：
@@ -67,17 +88,34 @@ test('renders sidebar', () => {
 ## 反模式2：生产代码中的仅测试方法
 
 **违规示例：**
-```typescript
-// ❌ 错误：destroy()仅在测试中使用
+```cpp
+// 错误：destroyForTest()仅在测试中使用
 class Session {
-  async destroy() {  // 看起来像生产API！
-    await this._workspaceManager?.destroyWorkspace(this.id);
+public:
+  Session(int userId) : userId_(userId) {}
+
+  // 看起来像生产API，但只在测试中使用！
+  void destroyForTest() {
+    if (workspaceManager_) {
+      workspaceManager_->destroyWorkspace(userId_);
+    }
     // ... 清理
   }
-}
+
+private:
+  int userId_;
+  WorkspaceManager* workspaceManager_;
+};
 
 // 在测试中
-afterEach(() => session.destroy());
+class SessionTest : public ::testing::Test {
+protected:
+  void TearDown() override {
+    session->destroyForTest();  // 调用仅测试方法
+  }
+
+  std::unique_ptr<Session> session;
+};
 ```
 
 **为什么这是错误的：**
@@ -87,20 +125,45 @@ afterEach(() => session.destroy());
 - 混淆了对象生命周期与实体生命周期
 
 **正确做法：**
-```typescript
-// ✅ 正确：测试工具处理测试清理
-// Session没有destroy() - 在生产环境中它是无状态的
+```cpp
+// 正确：测试工具处理测试清理
+// Session没有destroyForTest() - 在生产环境中它是无状态的
 
-// 在test-utils/中
-export async function cleanupSession(session: Session) {
-  const workspace = session.getWorkspaceInfo();
-  if (workspace) {
-    await workspaceManager.destroyWorkspace(workspace.id);
+class Session {
+public:
+  Session(int userId) : userId_(userId) {}
+
+  int getUserId() const { return userId_; }
+  // 没有destroyForTest()方法
+
+private:
+  int userId_;
+};
+
+// 在 test-utils/session_test_helper.h 中
+namespace test_utils {
+
+inline void cleanupSession(
+    const Session& session,
+    WorkspaceManager* workspaceManager
+) {
+  if (workspaceManager) {
+    workspaceManager->destroyWorkspace(session.getUserId());
   }
 }
 
+}  // namespace test_utils
+
 // 在测试中
-afterEach(() => cleanupSession(session));
+class SessionTest : public ::testing::Test {
+protected:
+  void TearDown() override {
+    test_utils::cleanupSession(*session, workspaceManager.get());
+  }
+
+  std::unique_ptr<Session> session;
+  std::unique_ptr<WorkspaceManager> workspaceManager;
+};
 ```
 
 ### 检查函数
@@ -122,17 +185,21 @@ afterEach(() => cleanupSession(session));
 ## 反模式3：不理解就使用Mock
 
 **违规示例：**
-```typescript
-// ❌ 错误：Mock破坏了测试逻辑
-test('detects duplicate server', () => {
+```cpp
+// 错误：Mock破坏了测试逻辑
+TEST(ServerManagerTest, DetectsDuplicateServer) {
   // Mock阻止了测试依赖的配置写入！
-  vi.mock('ToolCatalog', () => ({
-    discoverAndCacheTools: vi.fn().mockResolvedValue(undefined)
-  }));
+  MockToolCatalog mockCatalog;
+  EXPECT_CALL(mockCatalog, discoverAndCacheTools(_))
+      .WillRepeatedly(Return());  // 不做任何事
 
-  await addServer(config);
-  await addServer(config);  // 应该抛出异常 - 但不会！
-});
+  ServerConfig config{"server1", "localhost", 8080};
+  ServerManager manager(&mockCatalog);
+
+  manager.addServer(config);
+  manager.addServer(config);  // 应该抛出异常 - 但不会！
+  // 因为mockCatalog没有写入配置，无法检测重复
+}
 ```
 
 **为什么这是错误的：**
@@ -141,15 +208,28 @@ test('detects duplicate server', () => {
 - 测试因错误的原因通过或莫名其妙地失败
 
 **正确做法：**
-```typescript
-// ✅ 正确：在正确的层级进行mock
-test('detects duplicate server', () => {
-  // Mock慢的部分，保留测试需要的行为
-  vi.mock('MCPServerManager'); // 只mock慢的服务器启动
+```cpp
+// 正确：在正确的层级进行mock
+TEST(ServerManagerTest, DetectsDuplicateServer) {
+  // 使用真实的ToolCatalog（它写入配置的功能是测试需要的）
+  ToolCatalog catalog;
 
-  await addServer(config);  // 配置已写入
-  await addServer(config);  // 检测到重复 ✓
-});
+  // 只mock慢的部分：服务器网络连接
+  MockServerConnection mockConnection;
+  EXPECT_CALL(mockConnection, connect(_))
+      .WillRepeatedly(Return(true));
+
+  ServerConfig config{"server1", "localhost", 8080};
+  ServerManager manager(&catalog, &mockConnection);
+
+  manager.addServer(config);  // 配置已写入
+
+  // 检测到重复配置并抛出异常 ✓
+  EXPECT_THROW(
+    manager.addServer(config),
+    DuplicateServerException
+  );
+}
 ```
 
 ### 检查函数
@@ -181,34 +261,57 @@ test('detects duplicate server', () => {
 ## 反模式4：不完整的Mock
 
 **违规示例：**
-```typescript
-// ❌ 错误：部分mock - 只包含你认为需要的字段
-const mockResponse = {
-  status: 'success',
-  data: { userId: '123', name: 'Alice' }
-  // 缺失：下游代码使用的元数据
-};
+```cpp
+// 错误：部分mock - 只包含你认为需要的字段
+TEST(UserServiceTest, ProcessesUserResponse) {
+  // 不完整的响应结构
+  ApiResponse mockResponse;
+  mockResponse.status = "success";
+  mockResponse.data = UserData{"123", "Alice"};
+  // 缺失：下游代码使用的元数据字段
 
-// 后来：当代码访问response.metadata.requestId时崩溃
+  UserService service;
+  service.processResponse(mockResponse);
+
+  // 测试通过，但...
+}
+
+// 后来：当代码访问 response.metadata.requestId 时崩溃
+void UserService::processResponse(const ApiResponse& response) {
+  logUser(response.data.name);
+  // 崩溃：response.metadata 未初始化！
+  logger.log("Request ID: " + response.metadata.requestId);
+}
 ```
 
 **为什么这是错误的：**
 - **部分mock隐藏了结构假设** - 你只mock了你知道的字段
-- **下游代码可能依赖你未包含的字段** - 静默失败
+- **下游代码可能依赖你未包含的字段** - 静默失败或崩溃
 - **测试通过但集成失败** - Mock不完整，真实API完整
 - **错误的信心** - 测试对真实行为没有任何证明
 
 **铁律：** 必须mock现实中存在的完整数据结构，而不仅仅是你的测试直接使用的字段。
 
 **正确做法：**
-```typescript
-// ✅ 正确：镜像真实API的完整性
-const mockResponse = {
-  status: 'success',
-  data: { userId: '123', name: 'Alice' },
-  metadata: { requestId: 'req-789', timestamp: 1234567890 }
-  // 真实API返回的所有字段
-};
+```cpp
+// 正确：镜像真实API的完整性
+TEST(UserServiceTest, ProcessesUserResponse) {
+  // 完整的响应结构，包含所有真实API返回的字段
+  ApiResponse mockResponse;
+  mockResponse.status = "success";
+  mockResponse.data = UserData{"123", "Alice"};
+  mockResponse.metadata = Metadata{
+    "req-789",      // requestId
+    1234567890,     // timestamp
+    "v1.2.3"        // apiVersion
+  };
+
+  UserService service;
+  service.processResponse(mockResponse);
+
+  // 测试真实行为，不会因缺失字段而崩溃 ✓
+  EXPECT_EQ(service.getLastProcessedUser().name, "Alice");
+}
 ```
 
 ### 检查函数
@@ -233,8 +336,8 @@ const mockResponse = {
 
 **违规示例：**
 ```
-✅ 实现完成
-❌ 没有编写测试
+实现完成
+没有编写测试
 "准备测试"
 ```
 
@@ -287,9 +390,9 @@ TDD循环：
 
 ## 危险信号
 
-- 断言检查`*-mock`测试ID
-- 方法仅在测试文件中被调用
-- Mock设置占测试的>50%
+- 断言检查mock对象的存在性（如 `EXPECT_NE(mockPtr, nullptr)`）
+- 方法仅在测试文件中被调用（如 `destroyForTest()`）
+- Mock设置占测试代码的>50%
 - 移除mock时测试失败
 - 无法解释为什么需要mock
 - 为了"保证安全"而mock
