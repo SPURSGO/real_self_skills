@@ -18,53 +18,7 @@ description: 在实现任何功能或修复bug时使用，必须在编写实现�
 3. 依赖记忆补测试 → 会遗漏未曾考虑的边缘情况
 4. 跳过红绿循环 → 失去测试驱动设计的反馈
 
-## C++ 环境设置
-
 本文档使用 **C++ + Google Test** 作为示例语言和测试框架。
-
-### 必需依赖
-
-```cmake
-# CMakeLists.txt
-find_package(GTest REQUIRED)
-include(GoogleTest)
-
-add_executable(your_test
-  tests/your_test.cpp
-  src/your_implementation.cpp
-)
-
-target_link_libraries(your_test
-  GTest::gtest_main
-)
-
-gtest_discover_tests(your_test)
-```
-
-### 基本头文件
-
-```cpp
-#include <gtest/gtest.h>      // Google Test 框架
-#include <gmock/gmock.h>      // Google Mock (需要时)
-#include <functional>         // std::function
-#include <stdexcept>          // 异常类型
-```
-
-### 运行测试
-
-```bash
-# 构建
-cmake -B build && cmake --build build
-
-# 运行单个测试
-./build/tests/your_test
-
-# 运行所有测试
-ctest --test-dir build
-
-# 详细输出
-./build/tests/your_test --gtest_verbose
-```
 
 ## 何时使用
 
