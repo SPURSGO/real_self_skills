@@ -612,8 +612,7 @@ $ ./build/tests/form_validation_test
 
 ## 测试反模式
 
-在编写或修改测试、添加mock、或想要在生产代码中添加仅用于测试的方法时，阅读@testing-anti-patterns.md以避免常见陷阱：
+在编写或修改测试、添加mock、或想要在生产代码中添加仅用于测试的方法时，阅读@references/testing-anti-patterns.md以避免常见陷阱：
 - 测试mock行为而不是真实行为
 - 在生产类中添加仅用于测试的方法
 - 在不理解依赖的情况下使用mock
-
