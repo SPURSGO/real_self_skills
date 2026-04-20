@@ -1,0 +1,40 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "ninja-debug",
+      "displayName": "Ninja Debug",
+      "description": "Ninja generator with Debug build type and compile_commands.json export",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "EC_BUILD_TESTS": "OFF",
+        "EC_ENFORCE_V141_TOOLSET": "OFF"
+      }
+    },
+    {
+      "name": "vs-v141-debug",
+      "displayName": "VS Win32 v141 Debug",
+      "description": "Visual Studio 2022 with Win32 platform and v141 toolset",
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "Win32",
+        "strategy": "set"
+      },
+      "toolset": {
+        "value": "v141",
+        "strategy": "set"
+      },
+      "binaryDir": "${sourceDir}/build"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vs-v141-debug",
+      "configurePreset": "vs-v141-debug",
+      "configuration": "Debug"
+    }
+  ]
+}
